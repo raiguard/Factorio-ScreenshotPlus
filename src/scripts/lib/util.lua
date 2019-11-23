@@ -62,7 +62,9 @@ function util.textfield.clamp_number_input(e)
     local player, player_table = util.get_player(e)
     local textfield_data = player_table.gui.textfields[e.element.name]
     local text = e.element.text
-    if text == '' or tonumber(text) < textfield_data.clamp_low or tonumber(text) > textfield_data.clamp_high then
+    if text == ''
+    or (textfield_data.clamp_low and tonumber(text) < textfield_data.clamp_low)
+    or (textfield_data.clamp_high and tonumber(text) > textfield_data.clamp_high) then
         e.element.style = 'invalid_short_number_textfield'
         return false
     else

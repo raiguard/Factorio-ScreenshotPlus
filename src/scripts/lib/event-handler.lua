@@ -24,7 +24,8 @@ local bootstrap_handlers = {
 }
 
 -- register a handler for an event
--- when registering a conditional event, pass a unique conditional name as the third argument and the player index as the fourth argument
+-- when registering a conditional event, pass a unique conditional name as the third argument
+-- the fourth argument should be passed if the event handler applies to a specific player - otherwise don't include it
 function event.register(id, handler, conditional_name, player_index)
     -- recursive handling of ids
     if type(id) == 'table' then
@@ -50,7 +51,7 @@ function event.register(id, handler, conditional_name, player_index)
     end
     -- make sure the handler has not already been registered
     for i,t in ipairs(registry) do
-        -- if it is a conditional event, 
+        -- if it is a conditional event,
         if t.handler == handler and not conditional_name then
             -- remove handler for re-insertion at the bottom
             log('Re-registering existing event ID, moving to bottom')
@@ -60,7 +61,6 @@ function event.register(id, handler, conditional_name, player_index)
     -- add the handler to the events tables
     table.insert(registry, {handler=handler})
     if conditional_name then
-        assert(player_index, 'Must include player index when registering a conditional event')
         local con_registry = global.conditional_event_registry
         if not con_registry[conditional_name] then
             con_registry[conditional_name] = {id={id}, players={player_index}}
@@ -68,13 +68,15 @@ function event.register(id, handler, conditional_name, player_index)
             -- check if the ID has already been registered to this event
             for _,id in ipairs(con_registry[conditional_name].id) do
                 if id == id then
-                    -- someone else already registered it, so add our player index to the list
-                    table.insert(con_registry[conditional_name].players, player_index)     
+                    if player_index then
+                        -- someone else already registered it, so add our player index to the list
+                        table.insert(con_registry[conditional_name].players, player_index)
+                    end
                     return
                 end
             end
             -- insert the ID if it didn't exist already
-            table.insert(con_registry[conditional_name].id, id)     
+            table.insert(con_registry[conditional_name].id, id)
         end
     end
 end
@@ -225,12 +227,12 @@ function event.gui.register(filters, id, handler, conditional_name, player_index
             for _,id in ipairs(con_registry[conditional_name].id) do
                 if id == id then
                     -- someone else already registered it, so add our player index to the list
-                    table.insert(con_registry[conditional_name].players, player_index)     
+                    table.insert(con_registry[conditional_name].players, player_index)
                     return
                 end
             end
             -- insert the ID if it didn't exist already
-            table.insert(con_registry[conditional_name].id, id)     
+            table.insert(con_registry[conditional_name].id, id)
         end
     end
 end
@@ -274,7 +276,7 @@ function event.gui.deregister(id, handler, conditional_name, player_index)
     end
 end
 
--- handler for registered gui events, 
+-- handler for registered gui events,
 function event.gui.dispatch(e)
     local data = gui_event_data[e.name]
     -- check filters
@@ -301,23 +303,19 @@ end
 
 -- SHORTCUT FUNCTIONS
 
-local gui_event_shortcut_functions = {
-    on_checked_state_changed = 'on_gui_checked_state_changed',
-    on_click = 'on_gui_click',
-    on_confirmed = 'on_gui_confirmed',
-    on_elem_changed = 'on_gui_elem_changed',
-    on_location_changed = 'on_gui_location_changed',
-    on_selected_tab_changed = 'on_gui_selected_tab_changed',
-    on_selection_state_changed = 'on_gui_selection_state_changed',
-    on_switch_state_changed = 'on_gui_switch_state_changed',
-    on_text_changed = 'on_gui_text_changed',
-    on_value_changed = 'on_gui_value_changed'
-}
+-- these GUI events aren't to be used with event.gui, so don't shortcut them either!
+local gui_event_blacklist = {on_gui_opened=true, on_gui_closed=true}
 
 -- register shortcut functions
-for n,e in pairs(gui_event_shortcut_functions) do
-    event.gui[n] = function(filters, handler, conditional_name, player_index)
-        event.gui.register(filters, defines.events[e], handler, conditional_name, player_index)
+-- shortcut functions are all GUI-related functions that aren't blacklisted, omitting the 'gui' part of the event
+-- for example, event.gui.register(filters, defines.events.on_gui_click, handler) -> event.gui.on_click(filters, handler)
+for n,i in pairs(defines.events) do
+    if string.find(n, 'gui') then
+        if not gui_event_blacklist[n] then
+            event.gui[string.gsub(n, '_gui', '')] = function(filters, handler, conditional_name, player_index)
+                event.gui.register(filters, defines.events[n], handler, conditional_name, player_index)
+            end
+        end
     end
 end
 

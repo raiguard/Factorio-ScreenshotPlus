@@ -7,6 +7,7 @@ local titlebar = require('scripts/gui/gui-elems/titlebar')
 local mod_gui = require('mod-gui')
 local util = require('scripts/lib/util')
 
+local confirm_button_handler
 local editor_gui = {}
 
 -- --------------------------------------------------
@@ -63,7 +64,8 @@ end
 
 local direction_to_delta = {north={x=0,y=-1}, east={x=1,y=0}, south={x=0,y=1}, west={x=-1,y=0}}
 local direction_to_corner = {north='left_top', east='right_bottom', south='right_bottom', west='left_top'}
-local extensions_by_index = {'.jpg', '.png', '.bmp'}
+local type_to_switch_state = {picture='left', gif='right'}
+local switch_state_to_type = {left='picture', right='gif'}
 
 -- --------------------------------------------------
 -- EVENT HANDLERS
@@ -72,13 +74,13 @@ local extensions_by_index = {'.jpg', '.png', '.bmp'}
 local function reset_button_clicked(e)
     local player, player_table = util.get_player(e)
     player_table.current.settings = table.deepcopy(player_table.current.initial_settings)
-    player_table.current.area = table.deepcopy(player_table.current.initial_area)
+    player_table.current.settings.area = table.deepcopy(player_table.current.initial_settings.area)
     editor_gui.update(player.index)
 end
 
 local function area_adjustment_pad_adjustment_button_clicked(e)
     local player, player_table = util.get_player(e)
-    local area = player_table.current.area
+    local area = player_table.current.settings.area
     local rectangle = player_table.current.rectangle
     -- get delta  from element name
     local direction = string.match(e.element.name, 'ssp_editor_pos_area_(.*)_out_button')
@@ -94,7 +96,7 @@ end
 
 local function edge_adjustment_pad_adjustment_button_clicked(e)
     local player, player_table = util.get_player(e)
-    local area = player_table.current.area
+    local area = player_table.current.settings.area
     local rectangle = player_table.current.rectangle
     -- get delta and corner to change from element name
     local direction, type = string.match(e.element.name, 'ssp_editor_pos_edge_(.*)_(.*)_button')
@@ -119,16 +121,45 @@ local function edge_adjustment_pad_center_button_clicked(e)
     util.debug_print(e)
 end
 
-local function name_textfield_text_changed(e)
+local function type_switch_state_changed(e)
     local player, player_table = util.get_player(e)
-    local textfield_data = player_table.gui.textfields[e.element.name]
-    local text = e.element.text
-    if text == '' then
-        e.element.style = 'invalid_short_number_textfield'
+    local switch_state = e.element.switch_state
+    local elems = player_table.gui.editor
+    player_table.current.settings.type = switch_state_to_type[switch_state]
+    if switch_state == 'left' then
+        elems.gif_delay_textfield.enabled = false
+        elems.gif_length_textfield.enabled = false
     else
-        e.element.style = 'textbox'
-        textfield_data.last_value = text
+        elems.gif_delay_textfield.enabled = true
+        elems.gif_length_textfield.enabled = true
     end
+    editor_gui.update_reset_button(e)
+end
+
+local function gif_delay_textfield_text_changed(e)
+    util.textfield.clamp_number_input(e)
+end
+
+local function gif_delay_textfield_confirmed(e)
+    local player, player_table = util.get_player(e)
+    util.textfield.set_last_valid_value(e.element, player_table)
+    player_table.current.settings.gif_delay = tonumber(e.element.text)
+    editor_gui.update_reset_button(e)
+end
+
+local function gif_length_textfield_text_changed(e)
+    util.textfield.clamp_number_input(e)
+end
+
+local function gif_length_textfield_confirmed(e)
+    local player, player_table = util.get_player(e)
+    util.textfield.set_last_valid_value(e.element, player_table)
+    player_table.current.settings.gif_length = tonumber(e.element.text)
+    editor_gui.update_reset_button(e)
+end
+
+local function name_textfield_text_changed(e)
+    util.textfield.clamp_number_input(e)
 end
 
 local function name_textfield_confirmed(e)
@@ -199,23 +230,8 @@ local function confirm_button_clicked(e)
     local player, player_table = util.get_player(e)
     rendering.destroy(player_table.current.rectangle)
     editor_gui.destroy(player_table.gui.editor.window, player.index)
-    -- take screenshot
-    local area = player_table.current.area
-    local settings = player_table.current.settings
-    game.take_screenshot{
-        player = player,
-        by_player = player,
-        surface = player.surface,
-        position = area.center,
-        resolution = {x=area.width*settings.zoom*32, y=area.height*settings.zoom*32},
-        zoom = settings.zoom,
-        path = 'ScreenshotPlus/'..settings.filename..extensions_by_index[settings.extension],
-        quality = settings.jpeg_quality,
-        show_entity_info = settings.show_alt_info,
-        anti_alias = settings.antialias,
-        show_gui = false
-    }
-    player.print('Screenshot saved to script-output/ScreenshotPlus/'..settings.filename..extensions_by_index[settings.extension])
+    confirm_button_handler(e)
+    player_table.current = nil
 end
 
 local handlers = {
@@ -224,6 +240,11 @@ local handlers = {
     edge_adjustment_pad_adjustment_button_clicked = edge_adjustment_pad_adjustment_button_clicked,
     area_adjustment_pad_center_button_clicked = area_adjustment_pad_center_button_clicked,
     edge_adjustment_pad_center_button_clicked = edge_adjustment_pad_center_button_clicked,
+    editor_type_switch_state_changed = type_switch_state_changed,
+    editor_gif_delay_textfield_text_changed = gif_delay_textfield_text_changed,
+    editor_gif_delay_textfield_confirmed = gif_delay_textfield_confirmed,
+    editor_gif_length_textfield_text_changed = gif_length_textfield_text_changed,
+    editor_gif_length_textfield_confirmed = gif_length_textfield_confirmed,
     editor_name_textfield_text_changed = name_textfield_text_changed,
     editor_name_textfield_confirmed = name_textfield_confirmed,
     editor_extension_dropdown_selection_changed = extension_dropdown_selection_changed,
@@ -247,7 +268,7 @@ end)
 -- LIBRARY
 
 -- create the GUI and register conditional handlers
-function editor_gui.create(parent, gui_pinned, player_index, default_settings)
+function editor_gui.create(parent, gui_pinned, player_index, default_settings, confirm_handler)
     local window = parent.add{type='frame', name='ssp_editor_window', style=gui_pinned and mod_gui.frame_style or 'dialog_frame', direction='vertical'}
     local titlebar = titlebar.create(window, 'ssp_editor_titlebar', {label={'gui-screenshot-editor.titlebar-label-caption'}, draggable= not gui_pinned})
     local content_frame = window.add{type='frame', name='ssp_editor_content_frame', style='window_content_frame_packed', direction='vertical'}
@@ -256,7 +277,8 @@ function editor_gui.create(parent, gui_pinned, player_index, default_settings)
     toolbar.style.horizontally_stretchable = true
     toolbar.add{type='empty-widget', name='ssp_editor_toolbar_filler', style='invisible_horizontal_filler'}
     -- toolbar.add{type='textfield', name='ssp_editor_toolbar_textfield'}
-    local reset_button = toolbar.add{type='sprite-button', name='ssp_editor_toolbar_button', style='red_icon_button', sprite='utility/reset'}
+    local reset_button = toolbar.add{type='sprite-button', name='ssp_editor_toolbar_button', style='red_icon_button', sprite='utility/reset',
+                                     tooltip={'gui.reset'}}
     reset_button.enabled = false
     event.gui.on_click({element={reset_button}}, reset_button_clicked, 'editor_reset_button_clicked', player_index)
     -- positioning
@@ -277,6 +299,28 @@ function editor_gui.create(parent, gui_pinned, player_index, default_settings)
     local settings_frame = content_frame.add{type='frame', name='ssp_editor_settings_frame', style='ssp_bordered_frame', direction='vertical'}
     settings_frame.style.top_margin = -2
     settings_frame.add{type='label', name='ssp_editor_settings_label', style='caption_label', caption={'gui-screenshot-editor.section-settings-label'}}
+    local type_flow = create_setting_flow(settings_frame, 'type', false)
+    local type_switch = type_flow.add{type='switch', name='ssp_editor_settings_type_switch', switch_state=type_to_switch_state[default_settings.type],
+                                      left_label_caption={'gui-screenshot-editor.setting-type-picture-label'},
+                                      right_label_caption={'', {'gui-screenshot-editor.setting-type-gif-label'}, ' [img=info]'},
+                                      right_label_tooltip={'gui-screenshot-editor.setting-type-gif-tooltip'}}
+    event.gui.on_switch_state_changed({element={type_switch}}, type_switch_state_changed, 'editor_type_switch_state_changed', player_index)
+    local gif_delay_flow = create_setting_flow(settings_frame, 'gif-delay', true)
+    local gif_delay_textfield = gif_delay_flow.add{type='textfield', name='ssp_editor_settings_gif_delay_textfield',
+                                                           text=default_settings.gif_delay, lose_focus_on_confirm=true, clear_and_focus_on_right_click=true,
+                                                           numeric=true, allow_decimal=false}
+    gif_delay_textfield.style.width = 50
+    gif_delay_textfield.style.horizontal_align = 'center'
+    event.gui.on_text_changed({element={gif_delay_textfield}}, gif_delay_textfield_text_changed, 'editor_gif_delay_textfield_text_changed',
+                              player_index)
+    event.gui.on_confirmed({element={gif_delay_textfield}}, gif_delay_textfield_confirmed, 'editor_gif_delay_textfield_confirmed', player_index)
+    local gif_length_flow = create_setting_flow(settings_frame, 'gif-length', false)
+    local gif_length_textfield = gif_length_flow.add{type='textfield', name='ssp_editor_settings_gif_length_textfield', text=default_settings.gif_length,
+                                                            lose_focus_on_confirm=true, clear_and_focus_on_right_click=true, numeric=true, allow_decimal=false}
+    gif_length_textfield.style.width = 50
+    gif_length_textfield.style.horizontal_align = 'center'
+    event.gui.on_text_changed({element={gif_length_textfield}}, gif_length_textfield_text_changed, 'editor_gif_length_textfield_text_changed', player_index)
+    event.gui.on_confirmed({element={gif_length_textfield}}, gif_length_textfield_confirmed, 'editor_gif_length_textfield_confirmed', player_index)
     local filename_flow = create_setting_flow(settings_frame, 'filename', false)
     local filename_textfield = filename_flow.add{type='textfield', name='ssp_editor_settings_filename_textfield', lose_focus_on_confirm=true,
                                                  clear_and_focus_on_right_click=true, text=default_settings.filename}
@@ -291,7 +335,7 @@ function editor_gui.create(parent, gui_pinned, player_index, default_settings)
                                          player_index)
     local quality_flow = create_setting_flow(settings_frame, 'quality', true)
     local quality_textfield = quality_flow.add{type='textfield', name='ssp_editor_settings_quality_textfield', text=default_settings.jpeg_quality,
-                                               lose_focus_on_confirm=true, clear_and_focus_on_right_click=true}
+                                               lose_focus_on_confirm=true, clear_and_focus_on_right_click=true, numeric=true, allow_decimal=false}
     quality_textfield.style.width = 50
     quality_textfield.style.horizontal_align = 'center'
     if default_settings.extension ~= 1 then quality_textfield.enabled = false end
@@ -299,7 +343,7 @@ function editor_gui.create(parent, gui_pinned, player_index, default_settings)
     event.gui.on_confirmed({element={quality_textfield}}, quality_textfield_confirmed, 'editor_quality_textfield_confirmed', player_index)
     local zoom_flow = create_setting_flow(settings_frame, 'zoom', true)
     local zoom_textfield = zoom_flow.add{type='textfield', name='ssp_editor_settings_zoom_textfield', text=default_settings.zoom,
-                                         lose_focus_on_confirm=true, clear_and_focus_on_right_click=true}
+                                         lose_focus_on_confirm=true, clear_and_focus_on_right_click=true, numeric=true, allow_decimal=true}
     zoom_textfield.style.width = 50
     zoom_textfield.style.horizontal_align = 'center'
     event.gui.on_text_changed({element={zoom_textfield}}, zoom_textfield_text_changed, 'editor_zoom_textfield_text_changed', player_index)
@@ -330,12 +374,16 @@ function editor_gui.create(parent, gui_pinned, player_index, default_settings)
     else filler.style.vertically_stretchable = true end
     local confirm_button = dialog_buttons_flow.add{type='button', name='ssp_editor_dialog_confirm_button', style='confirm_button', caption={'gui.confirm'}}
     event.gui.on_click({element={confirm_button}}, confirm_button_clicked, 'editor_confirm_button_clicked', player_index)
-    return  {window=window, filename_textfield=filename_textfield, extension_dropdown=extension_dropdown, quality_textfield=quality_textfield,
+    confirm_button_handler = confirm_handler
+    return  {window=window, type_switch=type_switch, gif_delay_textfield=gif_delay_textfield, gif_length_textfield=gif_length_textfield,
+             filename_textfield=filename_textfield, extension_dropdown=extension_dropdown, quality_textfield=quality_textfield,
              zoom_textfield=zoom_textfield, alt_info_checkbox=alt_info_checkbox, antialias_checkbox=antialias_checkbox, reset_button=reset_button},
             { -- textfield data
                 ssp_editor_settings_filename_textfield={last_value=default_settings.filename},
                 ssp_editor_settings_quality_textfield={last_value=default_settings.jpeg_quality, clamp_low=1, clamp_high=100},
-                ssp_editor_settings_zoom_textfield={last_value=default_settings.zoom, clamp_low=0.01, clamp_high=2}
+                ssp_editor_settings_zoom_textfield={last_value=default_settings.zoom, clamp_low=0.01, clamp_high=2},
+                ssp_editor_settings_gif_delay_textfield={last_value=default_settings.gif_delay, clamp_high=60},
+                ssp_editor_settings_gif_length_textfield={last_value=default_settings.gif_length, clamp_low=1}
             }
 end
 
@@ -344,7 +392,8 @@ function editor_gui.update_reset_button(e)
     local player, player_table = util.get_player(e)
     local reset_button = player_table.gui.editor.reset_button
     local current = player_table.current
-    if util.table_deep_compare(current.settings, current.initial_settings) and util.table_deep_compare(current.area, current.initial_area) then
+    if util.table_deep_compare(current.settings, current.initial_settings)
+       and util.table_deep_compare(current.settings.area, current.initial_settings.area) then
         reset_button.enabled = false
     else
         reset_button.enabled = true
@@ -352,6 +401,8 @@ function editor_gui.update_reset_button(e)
 end
 
 local elem_to_setting_map = {
+    gif_delay_textfield = {'text', 'gif_delay'},
+    gif_length_textfield = {'text', 'gif_length'},
     filename_textfield = {'text', 'filename'},
     extension_dropdown = {'selected_index', 'extension'},
     quality_textfield = {'text', 'jpeg_quality'},
@@ -373,9 +424,17 @@ function editor_gui.update(player_index)
     else
         elems.quality_textfield.enabled = true
     end
+    elems.type_switch.switch_state = type_to_switch_state[settings.type]
+    if elems.type_switch.switch_state == 'left' then
+        elems.gif_delay_textfield.enabled = false
+        elems.gif_length_textfield.enabled = false
+    else
+        elems.gif_delay_textfield.enabled = true
+        elems.gif_length_textfield.enabled = true
+    end
     editor_gui.update_reset_button{player_index=player_index}
     local rectangle = player_table.current.rectangle
-    local area = player_table.current.area
+    local area = player_table.current.settings.area
     rendering.set_left_top(rectangle, area.left_top)
     rendering.set_right_bottom(rectangle, area.right_bottom)
 end
