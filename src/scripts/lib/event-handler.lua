@@ -26,8 +26,7 @@ local bootstrap_handlers = {
 -- register a handler for an event
 -- when registering a conditional event, pass a unique conditional name as the third argument
 -- additional_data is used internally by the handler, and is otherwise useless
--- gui_filters is used purely by the handler and MUST NOT be used elsewhere
-function event.register(id, handler, conditional_name, gui_filters)
+function event.register(id, handler, conditional_name)
     -- recursive handling of ids
     if type(id) == 'table' then
         for _,n in pairs(id) do
@@ -63,7 +62,7 @@ function event.register(id, handler, conditional_name, gui_filters)
     if conditional_name then
         local con_registry = global.conditional_event_registry
         if not con_registry[conditional_name] then
-            con_registry[conditional_name] = {id={id}, filters=gui_filters}
+            con_registry[conditional_name] = {id={id}}
         else
             table.insert(con_registry[conditional_name].id, id)
         end
@@ -195,10 +194,19 @@ function event.gui.register(filters, id, handler, conditional_name)
     -- create data table and register master handler if it doesn't exist
     if not gui_event_data[id] then
         gui_event_data[id] = {}
-        event.register(id, event.gui.dispatch, conditional_name, filters)
+        event.register(id, event.gui.dispatch)
     end
     -- store filters in event data table
     table.insert(gui_event_data[id], {handler=handler, filters=filters})
+    -- register conditional event if it is one
+    if conditional_name then
+        local con_registry = global.conditional_event_registry
+        if not con_registry[conditional_name] then
+            con_registry[conditional_name] = {id={id}, filters=filters}
+        else
+            table.insert(con_registry[conditional_name].id, id)
+        end
+    end
 end
 
 -- deregisters event(s) from specific gui element(s)
