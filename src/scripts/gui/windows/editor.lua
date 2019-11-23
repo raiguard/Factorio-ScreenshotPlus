@@ -63,12 +63,20 @@ end
 
 local direction_to_delta = {north={x=0,y=-1}, east={x=1,y=0}, south={x=0,y=1}, west={x=-1,y=0}}
 local direction_to_corner = {north='left_top', east='right_bottom', south='right_bottom', west='left_top'}
+local extensions_by_index = {'.jpg', '.png', '.bmp'}
 
 -- --------------------------------------------------
 -- EVENT HANDLERS
 -- All handlers are registered conditionally, and deregistered when the GUI is destroyed
 
-local function area_adjustment_pad_adjustment_button_click(e)
+local function reset_button_clicked(e)
+    local player, player_table = util.get_player(e)
+    player_table.current.settings = table.deepcopy(player_table.current.initial_settings)
+    player_table.current.area = table.deepcopy(player_table.current.initial_area)
+    editor_gui.update(player.index)
+end
+
+local function area_adjustment_pad_adjustment_button_clicked(e)
     local player, player_table = util.get_player(e)
     local area = player_table.current.area
     local rectangle = player_table.current.rectangle
@@ -81,9 +89,10 @@ local function area_adjustment_pad_adjustment_button_click(e)
     area = util.setup_area(area)
     rendering.set_left_top(rectangle, area.left_top)
     rendering.set_right_bottom(rectangle, area.right_bottom)
+    editor_gui.update_reset_button(e)
 end
 
-local function edge_adjustment_pad_adjustment_button_click(e)
+local function edge_adjustment_pad_adjustment_button_clicked(e)
     local player, player_table = util.get_player(e)
     local area = player_table.current.area
     local rectangle = player_table.current.rectangle
@@ -99,53 +108,83 @@ local function edge_adjustment_pad_adjustment_button_click(e)
     area = util.setup_area(area)
     rendering.set_left_top(rectangle, area.left_top)
     rendering.set_right_bottom(rectangle, area.right_bottom)
+    editor_gui.update_reset_button(e)
 end
 
-local function area_adjustment_pad_center_button_click(e)
+local function area_adjustment_pad_center_button_clicked(e)
     util.debug_print(e)
 end
 
-local function edge_adjustment_pad_center_button_click(e)
-    util.debug_print(e)
-end
-
-local function preview_button_click(e)
+local function edge_adjustment_pad_center_button_clicked(e)
     util.debug_print(e)
 end
 
 local function name_textfield_text_changed(e)
-    util.debug_print(e)
+    local player, player_table = util.get_player(e)
+    local textfield_data = player_table.gui.textfields[e.element.name]
+    local text = e.element.text
+    if text == '' then
+        e.element.style = 'invalid_short_number_textfield'
+    else
+        e.element.style = 'textbox'
+        textfield_data.last_value = text
+    end
 end
 
 local function name_textfield_confirmed(e)
-    util.debug_print(e)
+    local player, player_table = util.get_player(e)
+    util.textfield.set_last_valid_value(e.element, player_table)
+    player_table.current.settings.filename = e.element.text
+    editor_gui.update_reset_button(e)
 end
 
 local function extension_dropdown_selection_changed(e)
-    util.debug_print(e)
+    local player, player_table = util.get_player(e)
+    local selected_index = e.element.selected_index
+    player_table.current.settings.extension = selected_index
+    if selected_index == 1 then
+        player_table.gui.editor.quality_textfield.enabled = true
+    else
+        player_table.gui.editor.quality_textfield.enabled = false
+    end
+    editor_gui.update_reset_button(e)
 end
 
 local function quality_textfield_text_changed(e)
-    util.debug_print(e)
+    util.textfield.clamp_number_input(e)
 end
 
 local function quality_textfield_confirmed(e)
-    util.debug_print(e)
+    local player, player_table = util.get_player(e)
+    util.textfield.set_last_valid_value(e.element, player_table)
+    player_table.current.settings.quality = tonumber(e.element.text)
+    editor_gui.update_reset_button(e)
 end
 
 local function zoom_textfield_text_changed(e)
-    util.debug_print(e)
+    util.textfield.clamp_number_input(e)
 end
 
 local function zoom_textfield_confirmed(e)
-    util.debug_print(e)
+    local player, player_table = util.get_player(e)
+    util.textfield.set_last_valid_value(e.element, player_table)
+    player_table.current.settings.zoom = tonumber(e.element.text)
+    editor_gui.update_reset_button(e)
 end
 
 local function alt_info_checkbox_state_changed(e)
-    util.debug_print(e)
+    local player, player_table = util.get_player(e)
+    player_table.current.settings.alt_info = e.element.checked_state
+    editor_gui.update_reset_button(e)
 end
 
 local function antialias_checkbox_state_changed(e)
+    local player, player_table = util.get_player(e)
+    player_table.current.settings.antialias = e.element.checked_state
+    editor_gui.update_reset_button(e)
+end
+
+local function preview_button_click(e)
     util.debug_print(e)
 end
 
@@ -155,8 +194,6 @@ local function back_button_clicked(e)
     player_table.current = nil
     editor_gui.destroy(player_table.gui.editor.window, player.index)
 end
-
-local extensions_by_index = {'.jpg', '.png', '.bmp'}
 
 local function confirm_button_clicked(e)
     local player, player_table = util.get_player(e)
@@ -174,18 +211,19 @@ local function confirm_button_clicked(e)
         zoom = settings.zoom,
         path = 'ScreenshotPlus/'..settings.filename..extensions_by_index[settings.extension],
         quality = settings.jpeg_quality,
-        show_alt_info = settings.show_alt_info,
+        show_entity_info = settings.show_alt_info,
         anti_alias = settings.antialias,
         show_gui = false
     }
+    player.print('Screenshot saved to script-output/ScreenshotPlus/'..settings.filename..extensions_by_index[settings.extension])
 end
 
 local handlers = {
-    area_adjustment_pad_adjustment_button_click = area_adjustment_pad_adjustment_button_click,
-    edge_adjustment_pad_adjustment_button_click = edge_adjustment_pad_adjustment_button_click,
-    area_adjustment_pad_center_button_click = area_adjustment_pad_center_button_click,
-    edge_adjustment_pad_center_button_click = edge_adjustment_pad_center_button_click,
-    editor_preview_button_click = preview_button_click,
+    editor_reset_button_clicked = reset_button_clicked,
+    area_adjustment_pad_adjustment_button_clicked = area_adjustment_pad_adjustment_button_clicked,
+    edge_adjustment_pad_adjustment_button_clicked = edge_adjustment_pad_adjustment_button_clicked,
+    area_adjustment_pad_center_button_clicked = area_adjustment_pad_center_button_clicked,
+    edge_adjustment_pad_center_button_clicked = edge_adjustment_pad_center_button_clicked,
     editor_name_textfield_text_changed = name_textfield_text_changed,
     editor_name_textfield_confirmed = name_textfield_confirmed,
     editor_extension_dropdown_selection_changed = extension_dropdown_selection_changed,
@@ -195,6 +233,7 @@ local handlers = {
     editor_zoom_textfield_confirmed = zoom_textfield_confirmed,
     editor_alt_info_checkbox_state_changed = alt_info_checkbox_state_changed,
     editor_antialias_checkbox_state_changed = antialias_checkbox_state_changed,
+    editor_preview_button_clicked = preview_button_clicked,
     editor_back_button_clicked = back_button_clicked,
     editor_confirm_button_clicked = confirm_button_clicked
 }
@@ -217,26 +256,31 @@ function editor_gui.create(parent, gui_pinned, player_index, default_settings)
     toolbar.style.horizontally_stretchable = true
     toolbar.add{type='empty-widget', name='ssp_editor_toolbar_filler', style='invisible_horizontal_filler'}
     -- toolbar.add{type='textfield', name='ssp_editor_toolbar_textfield'}
-    toolbar.add{type='sprite-button', name='ssp_editor_toolbar_button', style='red_icon_button', sprite='utility/reset'}.enabled = false
+    local reset_button = toolbar.add{type='sprite-button', name='ssp_editor_toolbar_button', style='red_icon_button', sprite='utility/reset'}
+    reset_button.enabled = false
+    event.gui.on_click({element={reset_button}}, reset_button_clicked, 'editor_reset_button_clicked', player_index)
     -- positioning
     local pos_frame = content_frame.add{type='frame', name='ssp_editor_pos_frame', style='ssp_bordered_frame', direction='vertical'}
     pos_frame.add{type='label', name='ssp_editor_pos_label', style='caption_label', caption={'gui-screenshot-editor.section-positioning-label'}}
     local pad_flow = pos_frame.add{type='flow', name='ssp_editor_pos_pad_flow', direction='horizontal'}
     local area_adjustment_pad = create_adjustment_pad(pad_flow, 'area', 'ssp-square', false)
-    event.gui.on_click({element=area_adjustment_pad.adjustment}, area_adjustment_pad_adjustment_button_click, 'area_adjustment_pad_adjustment_button_click',
+    event.gui.on_click({element=area_adjustment_pad.adjustment}, area_adjustment_pad_adjustment_button_clicked, 'area_adjustment_pad_adjustment_button_clicked',
                        player_index)
-    event.gui.on_click({element=area_adjustment_pad.center}, area_adjustment_pad_center_button_click, 'area_adjustment_pad_center_button_click', player_index)
+    event.gui.on_click({element=area_adjustment_pad.center}, area_adjustment_pad_center_button_clicked, 'area_adjustment_pad_center_button_clicked',
+                       player_index)
     local edge_adjustment_pad = create_adjustment_pad(pad_flow, 'edge', 'ssp-square-sides', true)
-    event.gui.on_click({element=edge_adjustment_pad.adjustment}, edge_adjustment_pad_adjustment_button_click, 'edge_adjustment_pad_adjustment_button_click',
+    event.gui.on_click({element=edge_adjustment_pad.adjustment}, edge_adjustment_pad_adjustment_button_clicked, 'edge_adjustment_pad_adjustment_button_clicked',
                        player_index)
-    event.gui.on_click({element=edge_adjustment_pad.center}, edge_adjustment_pad_center_button_click, 'edge_adjustment_pad_center_button_click', player_index)
+    event.gui.on_click({element=edge_adjustment_pad.center}, edge_adjustment_pad_center_button_clicked, 'edge_adjustment_pad_center_button_clicked',
+                       player_index)
     -- settings
     local settings_frame = content_frame.add{type='frame', name='ssp_editor_settings_frame', style='ssp_bordered_frame', direction='vertical'}
     settings_frame.style.top_margin = -2
     settings_frame.add{type='label', name='ssp_editor_settings_label', style='caption_label', caption={'gui-screenshot-editor.section-settings-label'}}
     local filename_flow = create_setting_flow(settings_frame, 'filename', false)
-    local filename_textfield = filename_flow.add{type='textfield', name='ssp_editor_settings_filename_textfield', style='long_number_textfield',
-                                                 lose_focus_on_confirm=true, clear_and_focus_on_right_click=true, text=default_settings.filename}
+    local filename_textfield = filename_flow.add{type='textfield', name='ssp_editor_settings_filename_textfield', lose_focus_on_confirm=true,
+                                                 clear_and_focus_on_right_click=true, text=default_settings.filename}
+    filename_textfield.style.width = 160
     event.gui.on_text_changed({element={filename_textfield}}, name_textfield_text_changed, 'editor_name_textfield_text_changed', player_index)
     event.gui.on_confirmed({element={filename_textfield}}, name_textfield_confirmed, 'editor_name_textfield_confirmed', player_index)
     local extension_flow = create_setting_flow(settings_frame, 'extension', true)
@@ -250,6 +294,7 @@ function editor_gui.create(parent, gui_pinned, player_index, default_settings)
                                                lose_focus_on_confirm=true, clear_and_focus_on_right_click=true}
     quality_textfield.style.width = 50
     quality_textfield.style.horizontal_align = 'center'
+    if default_settings.extension ~= 1 then quality_textfield.enabled = false end
     event.gui.on_text_changed({element={quality_textfield}}, quality_textfield_text_changed, 'editor_quality_textfield_text_changed', player_index)
     event.gui.on_confirmed({element={quality_textfield}}, quality_textfield_confirmed, 'editor_quality_textfield_confirmed', player_index)
     local zoom_flow = create_setting_flow(settings_frame, 'zoom', true)
@@ -285,22 +330,57 @@ function editor_gui.create(parent, gui_pinned, player_index, default_settings)
     else filler.style.vertically_stretchable = true end
     local confirm_button = dialog_buttons_flow.add{type='button', name='ssp_editor_dialog_confirm_button', style='confirm_button', caption={'gui.confirm'}}
     event.gui.on_click({element={confirm_button}}, confirm_button_clicked, 'editor_confirm_button_clicked', player_index)
-    return {window=window, filename_textfield=filename_textfield, extension_dropdown=extension_dropdown, quality_textfield=quality_textfield,
-            zoom_textfield=zoom_textfield, alt_info_checkbox=alt_info_checkbox, antialias_checkbox=antialias_checkbox}
+    return  {window=window, filename_textfield=filename_textfield, extension_dropdown=extension_dropdown, quality_textfield=quality_textfield,
+             zoom_textfield=zoom_textfield, alt_info_checkbox=alt_info_checkbox, antialias_checkbox=antialias_checkbox, reset_button=reset_button},
+            { -- textfield data
+                ssp_editor_settings_filename_textfield={last_value=default_settings.filename},
+                ssp_editor_settings_quality_textfield={last_value=default_settings.jpeg_quality, clamp_low=1, clamp_high=100},
+                ssp_editor_settings_zoom_textfield={last_value=default_settings.zoom, clamp_low=0.01, clamp_high=2}
+            }
 end
 
-function editor_gui.update_reset_button()
-
+-- enables / disables the reset button as needed
+function editor_gui.update_reset_button(e)
+    local player, player_table = util.get_player(e)
+    local reset_button = player_table.gui.editor.reset_button
+    local current = player_table.current
+    if util.table_deep_compare(current.settings, current.initial_settings) and util.table_deep_compare(current.area, current.initial_area) then
+        reset_button.enabled = false
+    else
+        reset_button.enabled = true
+    end
 end
 
-function editor_gui.update()
+local elem_to_setting_map = {
+    filename_textfield = {'text', 'filename'},
+    extension_dropdown = {'selected_index', 'extension'},
+    quality_textfield = {'text', 'jpeg_quality'},
+    zoom_textfield = {'text', 'zoom'},
+    alt_info_checkbox = {'state', 'show_alt_info'},
+    antialias_checkbox = {'state', 'antialias'}
+}
 
+-- updates the values of all modifiable elements and updates rectangle as well
+function editor_gui.update(player_index)
+    local player, player_table = util.get_player(player_index)
+    local settings = player_table.current.settings
+    local elems = player_table.gui.editor
+    for n,t in pairs(elem_to_setting_map) do
+        elems[n][t[1]] = settings[t[2]]
+    end
+    if elems.extension_dropdown.selected_index ~= 1 then
+        elems.quality_textfield.enabled = false
+    else
+        elems.quality_textfield.enabled = true
+    end
+    editor_gui.update_reset_button{player_index=player_index}
+    local rectangle = player_table.current.rectangle
+    local area = player_table.current.area
+    rendering.set_left_top(rectangle, area.left_top)
+    rendering.set_right_bottom(rectangle, area.right_bottom)
 end
 
-function editor_gui.refresh()
-
-end
-
+-- destroys the GUI and deregisters all handlers
 function editor_gui.destroy(window, player_index)
     -- deregister all GUI events if needed
     local con_registry = global.conditional_event_registry

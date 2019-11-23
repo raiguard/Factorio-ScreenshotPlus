@@ -19,20 +19,22 @@ local function setup_player(index)
             show_alt_info = true,
             antialias = 0
         },
-        gui = {}
+        gui = {
+            textfields = {}
+        }
     }
     global.players[index] = data
     -- create mod GUI button
-    local button_flow = mod_gui.get_button_flow(util.get_player(index))
-    if not button_flow.ssp_editor_button then
-        local ssp_button = button_flow.add{type='sprite-button', name='ssp_editor_button', style=mod_gui.button_style, sprite='ssp-camera'}
-        ssp_button.style.padding = 5
-    end
+    -- local button_flow = mod_gui.get_button_flow(util.get_player(index))
+    -- if not button_flow.ssp_editor_button then
+    --     local ssp_button = button_flow.add{type='sprite-button', name='ssp_editor_button', style=mod_gui.button_style, sprite='ssp-camera'}
+    --     ssp_button.style.padding = 5
+    -- end
 end
 
-event.gui.on_click('ssp_editor_button', function(e)
-    print(serpent.block(global.conditional_event_registry))
-end)
+-- event.gui.on_click('ssp_editor_button', function(e)
+--     print(serpent.block(global.conditional_event_registry))
+-- end)
 
 event.on_init(function()
     global.players = {}
@@ -66,10 +68,16 @@ event.register({defines.events.on_player_selected_area, defines.events.on_player
         surface = player.surface,
         players = {player}
     }
-    player_table.gui.editor = editor_gui.create(parent, gui_pinned, player.index, player_table.default_settings)
+    local elems, textfield_data = editor_gui.create(parent, gui_pinned, player.index, player_table.default_settings)
+    player_table.gui.editor = elems
+    for n,t in pairs(textfield_data) do
+        player_table.gui.textfields[n] = t
+    end
     player_table.current = {
         area = area,
         rectangle = rectangle,
-        settings = player_table.default_settings
+        settings = table.deepcopy(player_table.default_settings),
+        initial_area = table.deepcopy(area),
+        initial_settings = table.deepcopy(player_table.default_settings)
     }
 end)
