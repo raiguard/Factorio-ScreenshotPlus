@@ -65,15 +65,13 @@ local function sprite(name, size, mipmaps, filename)
 end
 data:extend{
     sprite('ssp-camera', 32, 2, '__ScreenshotPlus__/graphics/shortcut-bar/screenshotplus-x32.png'),
-    sprite('ssp-pin', 32, 2, gui_icon_path..'pin.png'),
-    sprite('ssp-pin-white', 32, 2, gui_icon_path..'pin-white.png')
+    sprite('ssp-square-sides', 32, 2, gui_icon_path..'square-sides.png'),
+    sprite('ssp-square', 32, 2, gui_icon_path..'square.png')
 }
-for _,dir in ipairs{'up', 'left', 'down', 'right'} do
+for _,dir in ipairs{'north', 'east', 'south', 'west'} do
     data:extend{
         sprite('ssp-move-'..dir, 32, 2, gui_icon_path..'move-'..dir..'.png'),
         sprite('ssp-move-'..dir..'-white', 32, 2, gui_icon_path..'move-'..dir..'-white.png'),
-        sprite('ssp-square-sides', 32, 2, gui_icon_path..'square-sides.png'),
-        sprite('ssp-square', 32, 2, gui_icon_path..'square.png')
     }
 end
 
@@ -183,7 +181,7 @@ styles['close_button_light'] = {
     size = 16
 }
 
-styles['movement_pad_table'] = {
+styles['ssp_adjustment_pad_table'] = {
     type = 'table_style',
     parent = 'table',
     column_alignments = {
