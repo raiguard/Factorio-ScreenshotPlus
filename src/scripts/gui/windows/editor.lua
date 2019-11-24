@@ -382,7 +382,7 @@ function editor_gui.create(parent, gui_pinned, player_index, default_settings, c
                 ssp_editor_settings_filename_textfield={last_value=default_settings.filename},
                 ssp_editor_settings_quality_textfield={last_value=default_settings.jpeg_quality, clamp_low=1, clamp_high=100},
                 ssp_editor_settings_zoom_textfield={last_value=default_settings.zoom, clamp_low=0.01, clamp_high=2},
-                ssp_editor_settings_gif_delay_textfield={last_value=default_settings.gif_delay, clamp_high=60},
+                ssp_editor_settings_gif_delay_textfield={last_value=default_settings.gif_delay, clamp_low=1},
                 ssp_editor_settings_gif_length_textfield={last_value=default_settings.gif_length, clamp_low=1}
             }
 end
