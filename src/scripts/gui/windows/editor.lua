@@ -314,6 +314,7 @@ function editor_gui.create(parent, gui_pinned, player_index, default_settings, c
     event.gui.on_text_changed({element={gif_delay_textfield}}, gif_delay_textfield_text_changed, 'editor_gif_delay_textfield_text_changed',
                               player_index)
     event.gui.on_confirmed({element={gif_delay_textfield}}, gif_delay_textfield_confirmed, 'editor_gif_delay_textfield_confirmed', player_index)
+    if default_settings.type == 'picture' then gif_delay_textfield.enabled = false end
     local gif_length_flow = create_setting_flow(settings_frame, 'gif-length', false)
     local gif_length_textfield = gif_length_flow.add{type='textfield', name='ssp_editor_settings_gif_length_textfield', text=default_settings.gif_length,
                                                             lose_focus_on_confirm=true, clear_and_focus_on_right_click=true, numeric=true, allow_decimal=false}
@@ -321,6 +322,7 @@ function editor_gui.create(parent, gui_pinned, player_index, default_settings, c
     gif_length_textfield.style.horizontal_align = 'center'
     event.gui.on_text_changed({element={gif_length_textfield}}, gif_length_textfield_text_changed, 'editor_gif_length_textfield_text_changed', player_index)
     event.gui.on_confirmed({element={gif_length_textfield}}, gif_length_textfield_confirmed, 'editor_gif_length_textfield_confirmed', player_index)
+    if default_settings.type == 'picture' then gif_length_textfield.enabled = false end
     local filename_flow = create_setting_flow(settings_frame, 'filename', false)
     local filename_textfield = filename_flow.add{type='textfield', name='ssp_editor_settings_filename_textfield', lose_focus_on_confirm=true,
                                                  clear_and_focus_on_right_click=true, text=default_settings.filename}
